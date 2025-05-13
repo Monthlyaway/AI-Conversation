@@ -12,6 +12,8 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich import box
 from rich.live import Live
+from rich.spinner import Spinner
+from rich.layout import Layout
 
 # LangChain components - 使用更新的导入路径
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -22,7 +24,10 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.utils.function_calling import convert_to_openai_tool
-from langchain.memory import ConversationBufferMemory
+
+# LangGraph for memory persistence
+from langgraph.graph import END, StateGraph
+from langgraph.checkpoint.memory import MemorySaver
 
 # 混合模式：LLM和天气使用真实API，地图使用模拟
 USE_MOCK_WEATHER = os.getenv("USE_MOCK_WEATHER", "false").lower() == "true"
@@ -304,35 +309,22 @@ def main():
         temperature=0.7
     )
     
-    # 创建内存
-    memory = ConversationBufferMemory(
-        memory_key="history", 
-        return_messages=True
-    )
-    
-    # 创建提示模板，包含必要的变量
+    # 直接使用AgentExecutor并处理每次请求，而不使用LangGraph
+    # 创建代理
+    system_message = SystemMessage(content=system_prompt)
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
-        MessagesPlaceholder(variable_name="history"),
+        MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad")
     ])
     
-    # 创建代理
-    agent = create_openai_tools_agent(model, tools, prompt)
-    
-    # 创建代理执行器
-    agent_executor = AgentExecutor.from_agent_and_tools(
-        agent=agent,
-        tools=tools,
-        memory=memory,
-        verbose=False,
-        return_intermediate_steps=True,
-        handle_parsing_errors=True
-    )
+    # 对话历史记录
+    chat_history = []
     
     # 对话计数
     conversation_count = 0
+    
     while True:
         # 添加对话分隔符
         if conversation_count > 0:
@@ -346,46 +338,46 @@ def main():
             console.print("[bold cyan]Thank you for using the AI Assistant. Goodbye![/bold cyan]")
             break
         
-        # 处理用户输入
-        console.print("[bold green]Processing your request...[/bold green]")
+        # 创建旋转动画
+        spinner = Spinner("dots", text="[bold green]Processing your request...[/bold green]")
         
         try:
-            # 创建显示面板
-            result = ""
-            response_panel = Panel("", title="[bold yellow]A[/bold yellow]: 🤖 Response", border_style="green")
+            # 创建布局，旋转动画在处理时会显示
+            layout = Layout()
+            layout.update(spinner)
             
-            # 使用Live显示更新的输出
-            with Live(response_panel, refresh_per_second=10, console=console) as live:
-                # 流式输出
-                for chunk in agent_executor.stream({"input": user_input}):
-                    # 处理流式输出的内容
-                    if "chunks" in chunk:
-                        for token in chunk["chunks"]:
-                            if isinstance(token, str):
-                                result += token
-                                # 更新显示面板
-                                response_panel = Panel(
-                                    result, 
-                                    title="[bold yellow]A[/bold yellow]: 🤖 Response", 
-                                    border_style="green"
-                                )
-                                live.update(response_panel)
-                    elif "output" in chunk:
-                        # 最终输出
-                        final_output = chunk["output"]
-                        if final_output and isinstance(final_output, str):
-                            result = final_output
-                            response_panel = Panel(
-                                result, 
-                                title="[bold yellow]A[/bold yellow]: 🤖 Response", 
-                                border_style="green"
-                            )
-                            live.update(response_panel)
-        
+            # 使用Live显示旋转动画
+            with Live(layout, refresh_per_second=10, console=console) as live:
+                # 创建代理
+                agent = create_openai_tools_agent(model, tools, prompt)
+                agent_executor = AgentExecutor.from_agent_and_tools(
+                    agent=agent,
+                    tools=tools,
+                    verbose=False,
+                    return_intermediate_steps=True,
+                    handle_parsing_errors=True
+                )
+                
+                # 执行代理
+                result = agent_executor.invoke({
+                    "input": user_input,
+                    "chat_history": chat_history
+                })
+                
+                # 获取结果
+                response = result["output"]
+            
+            # 更新对话历史
+            chat_history.append(HumanMessage(content=user_input))
+            chat_history.append(AIMessage(content=response))
+            
+            # 显示结果
+            process_stream_with_ui(response)
+            
         except Exception as e:
             console.print(f"[bold red]Error: {str(e)}[/bold red]")
-            result = f"I encountered an error while processing your request. Please try again or rephrase your question."
-            process_stream_with_ui(result)
+            error_message = f"I encountered an error while processing your request. Please try again or rephrase your question."
+            process_stream_with_ui(error_message)
         
         conversation_count += 1
 
