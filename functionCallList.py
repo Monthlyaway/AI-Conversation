@@ -1,9 +1,15 @@
 import requests
 import json
+import os
 from datetime import datetime
+from dotenv import load_dotenv
 
-WEATHER_API_KEY = "YOUR API KEY"
-AMAP_API_KEY = "YOUR API KEY"
+# Load environment variables from .env file
+load_dotenv()
+
+# Get API keys from environment variables
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")  # 请在.env文件中设置你在 weatherapi.com 上申请的 API key
+AMAP_API_KEY = os.getenv("AMAP_API_KEY", "")  # 请在.env文件中设置你在高德开放平台上申请的 Web服务 API key
 
 
 def get_time(parameters):
