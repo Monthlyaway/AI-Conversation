@@ -136,7 +136,7 @@ def stream_output(response_stream):
     full_response = ""
     
     # Create a panel for the response that will be updated
-    response_panel = Panel("", title="🤖 Response", border_style="green")
+    response_panel = Panel("", title="[bold yellow]A[/bold yellow]: 🤖 Response", border_style="green")
     
     # Use Live display to update the panel in real-time
     with Live(response_panel, refresh_per_second=10, console=console) as live:
@@ -148,7 +148,7 @@ def stream_output(response_stream):
                 # Update the panel with the current response
                 response_panel = Panel(
                     full_response, 
-                    title="🤖 Response", 
+                    title="[bold yellow]A[/bold yellow]: 🤖 Response", 
                     border_style="green"
                 )
                 live.update(response_panel)
@@ -209,7 +209,6 @@ def main():
         # Check if we need to call a function
         if process_function_call(message):
             # If a function was called, generate a new response with the function result
-            console.print("[bold yellow]A[/bold yellow]: ", end="")
             
             # Get response with function results
             response = client.chat.completions.create(
