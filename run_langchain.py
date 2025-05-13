@@ -29,9 +29,19 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 
-# 混合模式：LLM和天气使用真实API，地图使用模拟
-USE_MOCK_WEATHER = os.getenv("USE_MOCK_WEATHER", "false").lower() == "true"
-USE_MOCK_MAP = os.getenv("USE_MOCK_MAP", "true").lower() == "true"
+# Initialize Rich console
+console = Console()
+
+# Load environment variables
+load_dotenv()
+
+# 修正环境变量解析方式，确保排除注释
+map_env_value = os.getenv("USE_MOCK_MAP", "true")
+# 如果值中包含注释（#）或空格，则只取第一个部分
+if map_env_value and ("#" in map_env_value or " " in map_env_value):
+    map_env_value = map_env_value.split("#")[0].split()[0]
+
+USE_MOCK_MAP = map_env_value.strip().lower() in ("true", "yes", "1")
 
 # 根据设置导入相应的函数
 if USE_MOCK_MAP:
@@ -43,22 +53,18 @@ if USE_MOCK_MAP:
         get_drive_route_planning,
         get_bicycling_route_planning
     )
-
-if USE_MOCK_WEATHER:
-    # 导入模拟天气函数
-    from functionCallListMock import get_weather
 else:
-    # 导入真实天气函数
-    from functionCallList import get_weather
+    # 导入真实地图函数
+    from functionCallList import (
+        get_coordinates_from_address,
+        get_walking_route_planning,
+        get_public_transportation_route_planning,
+        get_drive_route_planning,
+        get_bicycling_route_planning
+    )
 
-# 获取时间函数总是实时的
-from functionCallList import get_time
-
-# Initialize Rich console
-console = Console()
-
-# Load environment variables
-load_dotenv()
+# 天气和时间函数总是使用真实API
+from functionCallList import get_weather, get_time
 
 # Get API credentials
 API_KEY = os.getenv("API_KEY", "")  # LLM API key
@@ -70,7 +76,7 @@ missing_keys = []
 if not API_KEY:
     missing_keys.append("API_KEY")
 
-if not USE_MOCK_WEATHER and not os.getenv("WEATHER_API_KEY"):
+if not os.getenv("WEATHER_API_KEY"):
     missing_keys.append("WEATHER_API_KEY")
 
 if not USE_MOCK_MAP and not os.getenv("AMAP_API_KEY"):
@@ -84,9 +90,7 @@ if missing_keys:
         "1. Copy the .env.example file to .env: [cyan]cp .env.example .env[/cyan]\n"
         "2. Edit the .env file and add your API keys\n"
         "3. Run the application again\n\n"
-        f"[bold yellow]Note:[/bold yellow] This application is running in mixed mode:\n"
-        f"- Weather API mocking: [{'yellow' if USE_MOCK_WEATHER else 'green'}]{'ENABLED' if USE_MOCK_WEATHER else 'DISABLED'}[/{'yellow' if USE_MOCK_WEATHER else 'green'}]\n"
-        f"- Map API mocking: [{'yellow' if USE_MOCK_MAP else 'green'}]{'ENABLED' if USE_MOCK_MAP else 'DISABLED'}[/{'yellow' if USE_MOCK_MAP else 'green'}]\n\n"
+        f"[bold yellow]Note:[/bold yellow] Map API mocking is [{'yellow' if USE_MOCK_MAP else 'green'}]{'ENABLED' if USE_MOCK_MAP else 'DISABLED'}[/{'yellow' if USE_MOCK_MAP else 'green'}]\n\n"
         "[bold red]IMPORTANT:[/bold red] Never commit your API keys to version control or share them publicly.",
         title="⚠️ Configuration Warning",
         border_style="red"
@@ -250,9 +254,7 @@ def display_welcome():
         "- [green]Current time[/green] (e.g., 'What time is it now?')\n"
         "- [green]Weather information[/green] (e.g., 'How's the weather in Shanghai today?')\n"
         "- [green]Route planning[/green] (e.g., 'How do I get from Fudan University to Wujiaochang?')\n\n"
-        f"[bold]API Mode:[/bold]\n"
-        f"- Weather API: [{'yellow' if USE_MOCK_WEATHER else 'green'}]{'MOCK' if USE_MOCK_WEATHER else 'REAL'}[/{'yellow' if USE_MOCK_WEATHER else 'green'}]\n"
-        f"- Map API: [{'yellow' if USE_MOCK_MAP else 'green'}]{'MOCK' if USE_MOCK_MAP else 'REAL'}[/{'yellow' if USE_MOCK_MAP else 'green'}]\n\n"
+        f"[bold]Map API Mode:[/bold] [{'yellow' if USE_MOCK_MAP else 'green'}]{'MOCK' if USE_MOCK_MAP else 'REAL'}[/{'yellow' if USE_MOCK_MAP else 'green'}]\n\n"
         "Type [bold yellow]exit[/bold yellow], [bold yellow]quit[/bold yellow], or [bold yellow]bye[/bold yellow] to end the conversation.",
         title="🤖 AI Assistant",
         subtitle="Powered by LangChain & DeepSeek AI",
@@ -365,13 +367,37 @@ def main():
                 # 切换到响应面板 - 处理请求
                 live.update(response_panel)
                 
-                # 流式执行代理
+                # 流式执行代理，使用不同的流式模式尝试获取更细粒度的更新
                 for chunk in agent_executor.stream(
                     {"input": user_input, "chat_history": chat_history}
                 ):
-                    if "output" in chunk:
-                        # 更新流式输出
-                        response_text = chunk["output"]
+                    # 尝试从不同格式的chunk中提取输出
+                    if isinstance(chunk, dict) and "output" in chunk:
+                        new_content = chunk["output"]
+                        # 只有当内容变化时才更新
+                        if new_content and new_content != response_text:
+                            response_text = new_content
+                            response_panel = Panel(
+                                response_text,
+                                title="[bold yellow]A[/bold yellow]: 🤖 Response",
+                                border_style="green"
+                            )
+                            live.update(response_panel)
+                    # 尝试处理其他类型的流式输出格式
+                    elif hasattr(chunk, "content") and chunk.content:
+                        # 这可能是一个消息对象
+                        new_content = chunk.content
+                        if new_content and new_content != response_text:
+                            response_text = new_content
+                            response_panel = Panel(
+                                response_text,
+                                title="[bold yellow]A[/bold yellow]: 🤖 Response",
+                                border_style="green"
+                            )
+                            live.update(response_panel)
+                    elif isinstance(chunk, str) and chunk:
+                        # 直接字符串输出
+                        response_text += chunk
                         response_panel = Panel(
                             response_text,
                             title="[bold yellow]A[/bold yellow]: 🤖 Response",
