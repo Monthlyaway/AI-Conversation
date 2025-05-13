@@ -338,17 +338,21 @@ def main():
             console.print("[bold cyan]Thank you for using the AI Assistant. Goodbye![/bold cyan]")
             break
         
-        # 创建旋转动画
-        spinner = Spinner("dots", text="[bold green]Processing your request...[/bold green]")
-        
         try:
-            # 创建布局，旋转动画在处理时会显示
-            layout = Layout()
-            layout.update(spinner)
+            # 创建空的响应面板
+            response_text = ""
+            response_panel = Panel(
+                response_text, 
+                title="[bold yellow]A[/bold yellow]: 🤖 Response", 
+                border_style="green"
+            )
             
-            # 使用Live显示旋转动画
-            with Live(layout, refresh_per_second=10, console=console) as live:
-                # 创建代理
+            # 创建布局，包含旋转动画
+            spinner = Spinner("dots", text="[bold green]Processing your request...[/bold green]")
+            
+            # 首先显示spinner
+            with Live(spinner, refresh_per_second=10, console=console) as live:
+                # 创建代理 - 准备工作
                 agent = create_openai_tools_agent(model, tools, prompt)
                 agent_executor = AgentExecutor.from_agent_and_tools(
                     agent=agent,
@@ -358,21 +362,26 @@ def main():
                     handle_parsing_errors=True
                 )
                 
-                # 执行代理
-                result = agent_executor.invoke({
-                    "input": user_input,
-                    "chat_history": chat_history
-                })
+                # 切换到响应面板 - 处理请求
+                live.update(response_panel)
                 
-                # 获取结果
-                response = result["output"]
+                # 流式执行代理
+                for chunk in agent_executor.stream(
+                    {"input": user_input, "chat_history": chat_history}
+                ):
+                    if "output" in chunk:
+                        # 更新流式输出
+                        response_text = chunk["output"]
+                        response_panel = Panel(
+                            response_text,
+                            title="[bold yellow]A[/bold yellow]: 🤖 Response",
+                            border_style="green"
+                        )
+                        live.update(response_panel)
             
             # 更新对话历史
             chat_history.append(HumanMessage(content=user_input))
-            chat_history.append(AIMessage(content=response))
-            
-            # 显示结果
-            process_stream_with_ui(response)
+            chat_history.append(AIMessage(content=response_text))
             
         except Exception as e:
             console.print(f"[bold red]Error: {str(e)}[/bold red]")
