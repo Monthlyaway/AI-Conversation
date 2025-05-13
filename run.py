@@ -12,7 +12,30 @@ from rich.live import Live
 from rich.layout import Layout
 from rich import box
 
-from functionCallRegistry import function_registry, function_desc
+# 根据是否使用测试模式，导入对应的功能模块
+USE_MOCK_DATA = os.getenv("USE_MOCK_DATA", "true").lower() == "true"
+
+if USE_MOCK_DATA:
+    # 使用模拟数据模式
+    from functionCallListMock import *
+    import functionCallRegistry  # Import without direct assignment
+else:
+    # 使用真实API模式
+    from functionCallList import *
+    import functionCallRegistry  # Import without direct assignment
+
+# 在这里重新绑定function_registry和function_desc
+function_registry = {
+    "get_time": get_time,
+    "get_weather": get_weather,
+    "get_coordinates_from_address": get_coordinates_from_address,
+    "get_walking_route_planning": get_walking_route_planning,
+    "get_public_transportation_route_planning": get_public_transportation_route_planning,
+    "get_drive_route_planning": get_drive_route_planning,
+    "get_bicycling_route_planning": get_bicycling_route_planning
+}
+
+function_desc = functionCallRegistry.function_desc
 
 # Initialize Rich console
 console = Console()
@@ -29,10 +52,13 @@ MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-ai/DeepSeek-V3")
 missing_keys = []
 if not API_KEY:
     missing_keys.append("API_KEY")
-if not os.getenv("WEATHER_API_KEY"):
-    missing_keys.append("WEATHER_API_KEY")
-if not os.getenv("AMAP_API_KEY"):
-    missing_keys.append("AMAP_API_KEY")
+
+# 如果使用模拟数据模式，不需要检查Weather和Amap API keys
+if not USE_MOCK_DATA:
+    if not os.getenv("WEATHER_API_KEY"):
+        missing_keys.append("WEATHER_API_KEY")
+    if not os.getenv("AMAP_API_KEY"):
+        missing_keys.append("AMAP_API_KEY")
 
 if missing_keys:
     console.print(Panel.fit(
@@ -42,7 +68,8 @@ if missing_keys:
         "1. Copy the .env.example file to .env: [cyan]cp .env.example .env[/cyan]\n"
         "2. Edit the .env file and add your API keys\n"
         "3. Run the application again\n\n"
-        "[bold red]IMPORTANT:[/bold red] Never commit your API keys to version control or share them publicly. "
+        + ("[bold yellow]Note:[/bold yellow] You can run in mock mode without Weather and Amap API keys by setting USE_MOCK_DATA=true in your .env file.\n\n" if not USE_MOCK_DATA else "")
+        + "[bold red]IMPORTANT:[/bold red] Never commit your API keys to version control or share them publicly. "
         "The .env file is listed in .gitignore to help keep your keys secure.",
         title="⚠️ Configuration Error",
         border_style="red"
@@ -65,6 +92,7 @@ def display_welcome():
         "- [green]Current time[/green] (e.g., 'What time is it now?')\n"
         "- [green]Weather information[/green] (e.g., 'How's the weather in Shanghai today?')\n"
         "- [green]Route planning[/green] (e.g., 'How do I get from Fudan University to Wujiaochang?')\n\n"
+        f"[bold {'yellow' if USE_MOCK_DATA else 'green'}]{'MOCK MODE ACTIVE' if USE_MOCK_DATA else 'USING REAL APIs'}[/bold {'yellow' if USE_MOCK_DATA else 'green'}]\n\n"
         "Type [bold yellow]exit[/bold yellow], [bold yellow]quit[/bold yellow], or [bold yellow]bye[/bold yellow] to end the conversation.",
         title="🤖 AI Assistant",
         subtitle="Powered by DeepSeek AI",

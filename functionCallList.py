@@ -8,8 +8,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get API keys from environment variables
-WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")  # 请在.env文件中设置你在 weatherapi.com 上申请的 API key
-AMAP_API_KEY = os.getenv("AMAP_API_KEY", "")  # 请在.env文件中设置你在高德开放平台上申请的 Web服务 API key
+# 请在.env文件中设置你在 weatherapi.com 上申请的 API key
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")
+# 请在.env文件中设置你在高德开放平台上申请的 Web服务 API key
+AMAP_API_KEY = os.getenv("AMAP_API_KEY", "")
 
 
 def get_time(parameters):

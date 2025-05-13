@@ -7,10 +7,14 @@
 - 多轮对话：能够理解上下文，进行连续的对话
 - 流式响应：回答以流式方式输出，提供更好的用户体验
 - 美观的终端界面：使用 Rich 库提供彩色、格式化的终端输出
+- 测试模式：不需要第三方 API key 也能运行，使用模拟数据
 - 工具调用：支持以下功能
   - 时间查询（如"现在几点了"）
   - 天气查询（如"杭州今天天气如何"）
   - 出行路线规划（如"从复旦大学江湾校区到五角场要怎么走"）
+- 提供两种实现:
+  - 原生 OpenAI API 实现（`run.py`）
+  - LangChain 框架实现（`run_langchain.py`）
 
 ## 安装依赖
 
@@ -29,6 +33,12 @@ pip install openai python-dotenv requests rich
 ## 配置
 
 1. 复制 `.env.example` 文件，创建 `.env` 文件
+
+```bash
+cp .env.example .env
+```
+
+2. 编辑 `.env` 文件，填写相关 API 密钥:
 
 ```bash
 cp .env.example .env
@@ -98,4 +108,44 @@ A: 您可以选择以下几种方式从复旦大学江湾校区到五角场：
 - 实时动画展示 AI 思考和回答过程
 - 当调用外部函数时，显示详细的执行信息
 
-使用彩色提示符输入问题，输入 `exit`、`quit` 或 `bye` 结束对话。 
+使用彩色提示符输入问题，输入 `exit`、`quit` 或 `bye` 结束对话。
+
+## 实现方式
+
+本项目提供了两种实现方式：
+
+### 1. 原生 OpenAI API 实现 (run.py)
+
+直接使用 OpenAI 的 API 实现对话系统，功能最基础且稳定。
+
+```bash
+python run.py
+```
+
+### 2. LangChain 框架实现 (run_langchain.py)
+
+使用 LangChain 框架实现，代码更简洁，更易于扩展。
+
+```bash
+python run_langchain.py
+```
+
+## 测试模式
+
+如果你没有 WeatherAPI 或高德地图的 API 密钥，可以启用测试模式，使用模拟数据进行功能测试：
+
+1. 在 `.env` 文件中设置：
+
+```
+USE_MOCK_DATA=true
+```
+
+2. 运行任一实现：
+
+```bash
+python run.py
+# 或
+python run_langchain.py
+```
+
+测试模式会为天气和路径规划功能提供模拟数据，让你不需要第三方 API 也能测试完整功能。 
