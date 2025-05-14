@@ -9,7 +9,7 @@ from functionCallList import *
 import functionCallRegistry
 
 # Import necessary LangChain components
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
@@ -179,44 +179,6 @@ def get_biking_route(source_address: str, destination_address: str) -> str:
     return result
 
 
-# Helper function to create a pretty-print style output
-def pretty_print_message(message):
-    """Print message in a nice format similar to pretty_print()"""
-    if isinstance(message, HumanMessage):
-        print(
-            "================================[1m Human Message [0m=================================")
-        print()
-        print(message.content)
-    elif isinstance(message, AIMessage):
-        print(
-            "==================================[1m AI Message [0m==================================")
-        print()
-        # Handle different content types
-        content = message.content
-        if isinstance(content, str):
-            print(content)
-        elif isinstance(content, list):
-            # For tool calls and mixed content
-            for item in content:
-                if isinstance(item, dict):
-                    if "text" in item:
-                        print(item["text"])
-                    if "type" in item and item["type"] == "tool_use":
-                        print(f"Tool Calls:")
-                        print(
-                            f"  {item.get('name', 'Unknown')} ({item.get('id', 'Unknown')})")
-                        if "input" in item:
-                            print(f"  Args:")
-                            for k, v in item["input"].items():
-                                print(f"    {k}: {v}")
-    else:  # ToolMessage or other
-        print(
-            "=================================[1m Tool Message [0m=================================")
-        print(f"Name: {getattr(message, 'name', 'Unknown')}")
-        print()
-        print(message.content)
-
-
 def main():
     """Main function to run the application."""
     # Define tools
@@ -270,18 +232,26 @@ def main():
             # Format the input for the agent
             agent_input = {"messages": [HumanMessage(content=user_input)]}
 
-            # Stream the agent's response using values mode to get all messages
+            # # Option 1: Stream with values mode - This shows complete messages
             for step in agent_executor.stream(
                 agent_input,
                 config,
                 stream_mode="values"
             ):
-                # Display the last message in the step
                 if "messages" in step and len(step["messages"]) > 0:
-                    last_message = step["messages"][-1]
+                    step["messages"][-1].pretty_print()
 
-                    # Use pretty printing to display the message nicely
-                    pretty_print_message(last_message)
+            # Option 2: Stream with messages mode - This shows token-by-token
+            # Uncomment this and comment out Option 1 to switch modes
+
+            # for step, metadata in agent_executor.stream(
+            #     agent_input,
+            #     config,
+            #     stream_mode="messages"
+            # ):
+            #     if metadata["langgraph_node"] == "agent" and (text := step.text()):
+            #         print(text, end="|")
+            # print()  # Add a newline at the end
 
         except Exception as e:
             logger.error(f"Error during agent execution: {str(e)}")
